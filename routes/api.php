@@ -2,153 +2,35 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Models\Item;
-use App\Models\Collection;
+use App\Http\Controllers\ItemController;
+use App\Http\Controllers\CollectionController;
+use App\Http\Resources\UserResource;
 
 // Public routes (no auth required)
-Route::get('/items', function () {
-    return Item::with('uploader', 'collections')->paginate(20);
-});
-
-Route::get('/items/{id}', function ($id) {
-    return Item::with('uploader', 'collections')->findOrFail($id);
-});
-
-Route::get('/collections', function () {
-    return Collection::with('owner')->paginate(20);
-});
-
-Route::get('/collections/{id}', function ($id) {
-    return Collection::with('owner', 'items')->findOrFail($id);
-});
+Route::get('/items', [ItemController::class, 'index']);
+Route::get('/items/{id}', [ItemController::class, 'show']);
+Route::get('/collections', [CollectionController::class, 'index']);
+Route::get('/collections/{id}', [CollectionController::class, 'show']);
 
 // Protected routes (require Supabase JWT)
 Route::middleware('supabase.auth')->group(function () {
 
     // Get authenticated user
     Route::get('/me', function (Request $request) {
-        return $request->user();
+        return new UserResource($request->user());
     });
 
-    // Create item
-    Route::post('/items', function (Request $request) {
-        $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'file_url' => 'required|url',
-            'file_type' => 'required|string|max:100',
-        ]);
+    // Item routes
+    Route::post('/items', [ItemController::class, 'store']);
+    Route::put('/items/{id}', [ItemController::class, 'update']);
+    Route::delete('/items/{id}', [ItemController::class, 'destroy']);
 
-        $item = Item::create([
-            ...$validated,
-            'uploader_id' => $request->user()->id,
-        ]);
+    // Collection routes
+    Route::post('/collections', [CollectionController::class, 'store']);
+    Route::put('/collections/{id}', [CollectionController::class, 'update']);
+    Route::delete('/collections/{id}', [CollectionController::class, 'destroy']);
 
-        return response()->json($item, 201);
-    });
-
-    // Update item (only owner)
-    Route::put('/items/{id}', function (Request $request, $id) {
-        $item = Item::findOrFail($id);
-
-        if ($item->uploader_id !== $request->user()->id) {
-            return response()->json(['error' => 'Forbidden'], 403);
-        }
-
-        $validated = $request->validate([
-            'title' => 'sometimes|string|max:255',
-            'description' => 'nullable|string',
-            'file_url' => 'sometimes|url',
-            'file_type' => 'sometimes|string|max:100',
-        ]);
-
-        $item->update($validated);
-        return $item;
-    });
-
-    // Delete item (only owner)
-    Route::delete('/items/{id}', function (Request $request, $id) {
-        $item = Item::findOrFail($id);
-
-        if ($item->uploader_id !== $request->user()->id) {
-            return response()->json(['error' => 'Forbidden'], 403);
-        }
-
-        $item->delete();
-        return response()->json(['message' => 'Item deleted'], 200);
-    });
-
-    // Create collection
-    Route::post('/collections', function (Request $request) {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-        ]);
-
-        $collection = Collection::create([
-            ...$validated,
-            'owner_id' => $request->user()->id,
-        ]);
-
-        return response()->json($collection, 201);
-    });
-
-    // Update collection (only owner)
-    Route::put('/collections/{id}', function (Request $request, $id) {
-        $collection = Collection::findOrFail($id);
-
-        if ($collection->owner_id !== $request->user()->id) {
-            return response()->json(['error' => 'Forbidden'], 403);
-        }
-
-        $validated = $request->validate([
-            'name' => 'sometimes|string|max:255',
-            'description' => 'nullable|string',
-        ]);
-
-        $collection->update($validated);
-        return $collection;
-    });
-
-    // Delete collection (only owner)
-    Route::delete('/collections/{id}', function (Request $request, $id) {
-        $collection = Collection::findOrFail($id);
-
-        if ($collection->owner_id !== $request->user()->id) {
-            return response()->json(['error' => 'Forbidden'], 403);
-        }
-
-        $collection->delete();
-        return response()->json(['message' => 'Collection deleted'], 200);
-    });
-
-    // Add item to collection
-    Route::post('/collections/{id}/items', function (Request $request, $id) {
-        $collection = Collection::findOrFail($id);
-
-        if ($collection->owner_id !== $request->user()->id) {
-            return response()->json(['error' => 'Forbidden'], 403);
-        }
-
-        $validated = $request->validate([
-            'item_id' => 'required|exists:items,id',
-        ]);
-
-        $collection->items()->syncWithoutDetaching([$validated['item_id']]);
-
-        return response()->json(['message' => 'Item added to collection'], 200);
-    });
-
-    // Remove item from collection
-    Route::delete('/collections/{id}/items/{itemId}', function (Request $request, $id, $itemId) {
-        $collection = Collection::findOrFail($id);
-
-        if ($collection->owner_id !== $request->user()->id) {
-            return response()->json(['error' => 'Forbidden'], 403);
-        }
-
-        $collection->items()->detach($itemId);
-
-        return response()->json(['message' => 'Item removed from collection'], 200);
-    });
+    // Collection-Item relationships
+    Route::post('/collections/{id}/items', [CollectionController::class, 'addItem']);
+    Route::delete('/collections/{id}/items/{itemId}', [CollectionController::class, 'removeItem']);
 });

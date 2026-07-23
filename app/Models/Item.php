@@ -14,7 +14,16 @@ class Item extends Model
         'description',
         'file_url',
         'file_type',
+        'category',
+        'tags',
         'uploader_id',
+    ];
+
+    /**
+     * The attributes that should be cast.
+     */
+    protected $casts = [
+        'tags' => 'array',
     ];
 
     /**
