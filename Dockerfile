@@ -1,4 +1,4 @@
-FROM php:8.2-fpm
+FROM php:8.4-cli
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -29,7 +29,8 @@ WORKDIR /var/www
 COPY . /var/www
 
 # Install dependencies
-RUN composer install --no-dev --optimize-autoloader --no-interaction
+# Inside your Dockerfile:
+RUN composer install --no-dev --optimize-autoloader --no-interaction --ignore-platform-req=php
 
 # Set permissions
 RUN chown -R www-data:www-data /var/www \

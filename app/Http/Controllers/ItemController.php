@@ -6,6 +6,7 @@ use App\Models\Item;
 use App\Http\Resources\ItemResource;
 use App\Http\Resources\ItemCollection;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ItemController extends Controller
 {
@@ -16,9 +17,27 @@ class ItemController extends Controller
     {
         $query = Item::with('uploader', 'collections');
 
-        // Search by title
-        if ($request->has('search')) {
-            $query->where('title', 'ilike', '%' . $request->search . '%');
+        // Full-text search using PostgreSQL tsvector
+        if ($request->has('search') && !empty($request->search)) {
+            $searchTerm = $request->search;
+
+            // Use websearch_to_tsquery for user-friendly search (supports quotes, OR, AND, -)
+            $query->whereRaw(
+                "search_vector @@ websearch_to_tsquery('english', ?)",
+                [$searchTerm]
+            );
+
+            // Add relevance ranking
+            $query->selectRaw(
+                "items.*, ts_rank(search_vector, websearch_to_tsquery('english', ?)) as relevance",
+                [$searchTerm]
+            );
+
+            // Order by relevance (most relevant first)
+            $query->orderBy('relevance', 'desc');
+        } else {
+            // No search term: order by newest first
+            $query->orderBy('created_at', 'desc');
         }
 
         // Filter by category
@@ -30,9 +49,6 @@ class ItemController extends Controller
         if ($request->has('tag')) {
             $query->whereJsonContains('tags', $request->tag);
         }
-
-        // Sort by newest first by default
-        $query->orderBy('created_at', 'desc');
 
         // Paginate results
         $perPage = $request->get('per_page', 20);

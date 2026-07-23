@@ -24,26 +24,48 @@ Authorization: Bearer <supabase-jwt-token>
 
 ### GET /items
 
-List all items with pagination, filtering, and search.
+List all items with pagination, filtering, and full-text search.
 
 **Query Parameters:**
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `search` | string | Search items by title (case-insensitive) |
+| `search` | string | Full-text search across title and description with relevance ranking. Supports phrases, AND, OR, and NOT operators (see examples below) |
 | `category` | string | Filter items by exact category match |
 | `tag` | string | Filter items that have this tag |
 | `per_page` | integer | Items per page (default: 20) |
 | `page` | integer | Page number (default: 1) |
 
+**Full-Text Search Features:**
+
+The `search` parameter uses PostgreSQL's full-text search with the following capabilities:
+
+- **Simple search**: `search=historic` - finds items containing "historic" in title or description
+- **Phrase search**: `search="world war"` - finds exact phrase "world war"
+- **AND operator**: `search=world AND war` - finds items containing both words
+- **OR operator**: `search=photo OR image` - finds items containing either word
+- **NOT operator**: `search=historic -war` - finds "historic" but excludes items containing "war"
+- **Combined**: `search="world war" OR vintage -modern` - complex queries
+
+Results are automatically ranked by relevance when searching, with title matches weighted higher than description matches.
+
 **Example Requests:**
 
 ```bash
-# Get all items
+# Get all items (sorted by newest)
 GET /api/items
 
-# Search by title
+# Simple search (ranked by relevance)
 GET /api/items?search=historic
+
+# Phrase search
+GET /api/items?search="world war two"
+
+# Boolean search
+GET /api/items?search=photo AND vintage
+
+# Exclude terms
+GET /api/items?search=document -classified
 
 # Filter by category
 GET /api/items?category=documents
@@ -51,8 +73,11 @@ GET /api/items?category=documents
 # Filter by tag
 GET /api/items?tag=public-domain
 
-# Combine filters
+# Combine search with filters
 GET /api/items?search=war&category=photos&per_page=50
+
+# Complex query
+GET /api/items?search="civil war" OR "revolutionary war"&category=photos&tag=history
 
 # Pagination
 GET /api/items?page=2&per_page=10
